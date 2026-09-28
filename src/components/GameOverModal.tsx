@@ -53,8 +53,97 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
     setIsSubmitting(true);
     setSubmitResult(null);
 
+    const sheetPayload = {
+      studentName: finalName,
+      studentId: finalStuId,
+      quizScore,
+      gameScore: score,
+      totalScore,
+      correctCount: solvedCount,
+      totalQuestions: totalQuizzes,
+      cleared: won,
+      timeTaken,
+      timestamp: new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
+    };
+
+    let sheetSynced = false;
+    let feedbackMessage = '';
+
+    // 1. Direct browser fetch to Google Apps Script (works in both dev and shared/preview environments)
+    if (effectiveUrl && effectiveUrl.startsWith('https://script.google.com/')) {
+      try {
+        const gsRes = await fetch(effectiveUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(sheetPayload),
+          redirect: 'follow',
+        });
+
+        if (gsRes.ok) {
+          const text = await gsRes.text();
+          if (text.includes('<html') || text.includes('accounts.google.com') || text.includes('drive-logo')) {
+            feedbackMessage = "구글 시트 배포 권한을 '모든 사용자(Anyone)'로 확인해주세요.";
+          } else {
+            try {
+              const json = JSON.parse(text);
+              if (json.status === 'success' || !json.error) {
+                sheetSynced = true;
+                feedbackMessage = json.message || '구글 시트에 성적이 성공적으로 저장되었습니다!';
+              }
+            } catch {
+              sheetSynced = true;
+              feedbackMessage = '구글 시트에 성적이 성공적으로 저장되었습니다!';
+            }
+          }
+        }
+      } catch (directErr) {
+        console.warn('Direct Google Sheet fetch failed, attempting no-cors fallback:', directErr);
+        // Fallback: mode 'no-cors' sends the POST request to Apps Script anyway
+        try {
+          await fetch(effectiveUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(sheetPayload),
+            mode: 'no-cors'
+          });
+          sheetSynced = true;
+          feedbackMessage = '구글 시트에 성적이 전송되었습니다!';
+        } catch (noCorsErr) {
+          console.error('No-cors fetch failed:', noCorsErr);
+        }
+      }
+    }
+
+    // 2. Also safely notify local backend /api/record-score if available
     try {
-      const payload = {
+      const res = await fetch('/api/record-score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...sheetPayload,
+          appsScriptUrl: effectiveUrl
+        }),
+      });
+
+      if (res.ok) {
+        const cType = res.headers.get('content-type') || '';
+        if (cType.includes('application/json')) {
+          const data = await res.json();
+          if (data.googleSheetSynced) {
+            sheetSynced = true;
+            if (!feedbackMessage) feedbackMessage = data.message;
+          }
+        }
+      }
+    } catch {
+      // Local server route may not exist in static deployment, gracefully ignore
+    }
+
+    // 3. Always backup to localStorage for client-side persistence and local leaderboard
+    try {
+      const stored = JSON.parse(localStorage.getItem('super_rabbit_score_records') || '[]');
+      const newRec = {
+        id: 'score_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
         studentName: finalName,
         studentId: finalStuId,
         quizScore,
@@ -64,38 +153,35 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         totalQuestions: totalQuizzes,
         cleared: won,
         timeTaken,
-        appsScriptUrl: effectiveUrl,
+        timestamp: sheetPayload.timestamp,
+        syncedToGoogleSheet: sheetSynced,
       };
+      stored.unshift(newRec);
+      localStorage.setItem('super_rabbit_score_records', JSON.stringify(stored.slice(0, 100)));
+    } catch {
+      // ignore localStorage errors
+    }
 
-      const res = await fetch('/api/record-score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+    setIsSubmitting(false);
 
-      const data = await res.json();
+    if (sheetSynced) {
       setSubmitResult({
-        success: data.success,
-        message: data.message || '성적이 등록되었습니다!',
-        sheetSynced: !!data.googleSheetSynced,
+        success: true,
+        message: feedbackMessage || '구글 시트에 성적이 성공적으로 저장되었습니다!',
+        sheetSynced: true,
       });
-
-      if (data.success) {
-        sounds.playCoin();
-        confetti({
-          particleCount: 80,
-          spread: 85,
-          origin: { y: 0.6 },
-        });
-      }
-    } catch (err: any) {
+      sounds.playCoin();
+      confetti({
+        particleCount: 80,
+        spread: 85,
+        origin: { y: 0.6 },
+      });
+    } else {
       setSubmitResult({
         success: false,
-        message: '저장 실패: ' + (err.message || '네트워크 오류'),
+        message: feedbackMessage || '저장 실패: 네트워크 응답을 확인해주세요.',
         sheetSynced: false,
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 

@@ -56,7 +56,8 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
   };
 
   const handleTestConnection = async () => {
-    if (!inputUrl.trim()) {
+    const targetUrl = inputUrl.trim();
+    if (!targetUrl) {
       setTestResult({ success: false, message: 'Google Apps Script 웹 앱 URL을 입력해주세요.' });
       return;
     }
@@ -64,11 +65,65 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
     setIsTesting(true);
     setTestResult(null);
 
+    // 1. Direct browser fetch to Google Apps Script
+    try {
+      const directRes = await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          studentName: '연동 테스트',
+          studentId: 'TEST-01',
+          quizScore: 100,
+          gameScore: 100,
+          totalScore: 200,
+          correctCount: 2,
+          totalQuestions: 20,
+          cleared: false,
+          timeTaken: 10,
+          timestamp: new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
+        }),
+        redirect: 'follow',
+      });
+
+      if (directRes.ok) {
+        const text = await directRes.text();
+        if (text.includes('<html') || text.includes('accounts.google.com') || text.includes('drive-logo')) {
+          setTestResult({
+            success: false,
+            needsAnyonePermission: true,
+            message: "Google Apps Script 배포 설정에서 '액세스 권한'을 '모든 사용자(Anyone)'로 변경해야 합니다.",
+            details: "구글 웹 앱 접근이 로그인/권한 제한(HTTP 403)으로 차단되었습니다.",
+            fixSteps: [
+              "1. 구글 시트 상단 메뉴 [확장 프로그램] > [Apps Script]를 엽니다.",
+              "2. 우측 상단 [배포] 버튼 > [배포 관리]를 클릭합니다.",
+              "3. 등록된 웹 앱 우측의 연필 모양 [수정 ✏️] 아이콘을 클릭합니다.",
+              "4. '액세스 권한이 있는 사용자(Who has access)'를 '모든 사용자(Anyone)'로 변경합니다.",
+              "5. 버전 드롭다운에서 [새 버전]을 선택하고 우측 하단 [배포]를 누릅니다."
+            ]
+          });
+          setIsTesting(false);
+          return;
+        }
+
+        setTestResult({
+          success: true,
+          message: 'Google Apps Script 웹 앱과 성공적으로 연결되었습니다!',
+          needsAnyonePermission: false
+        });
+        onSaveUrl(targetUrl);
+        setIsTesting(false);
+        return;
+      }
+    } catch {
+      // Direct fetch may have hit network or static host, try backend fallback
+    }
+
+    // 2. Secondary backend proxy test
     try {
       const res = await fetch('/api/test-google-sheet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appsScriptUrl: inputUrl.trim() }),
+        body: JSON.stringify({ appsScriptUrl: targetUrl }),
       });
 
       const rawText = await res.text();
@@ -77,7 +132,6 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
       try {
         data = JSON.parse(rawText);
       } catch {
-        // Proxy or intermediate network returned HTML error
         const isForbidden = rawText.includes('403') || rawText.includes('Forbidden') || rawText.includes('html');
         data = {
           success: false,
@@ -105,21 +159,13 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
       });
 
       if (data.success) {
-        onSaveUrl(inputUrl.trim());
+        onSaveUrl(targetUrl);
       }
     } catch (err: any) {
       setTestResult({
         success: false,
         message: '연결 실패: ' + (err.message || '네트워크 응답 없음'),
-        needsAnyonePermission: true,
-        details: "Google Apps Script 배포 권한이 '모든 사용자(Anyone)'로 되어 있는지 확인해주세요.",
-        fixSteps: [
-          "1. 구글 시트 상단 메뉴 [확장 프로그램] > [Apps Script]를 엽니다.",
-          "2. 우측 상단 [배포] 버튼 > [배포 관리]를 클릭합니다.",
-          "3. 등록된 웹 앱 우측의 연필 모양 [수정 ✏️] 아이콘을 클릭합니다.",
-          "4. '액세스 권한이 있는 사용자(Who has access)'를 '모든 사용자(Anyone)'로 변경합니다.",
-          "5. 버전 드롭다운에서 [새 버전]을 선택하고 우측 하단 [배포]를 누릅니다."
-        ]
+        needsAnyonePermission: false,
       });
     } finally {
       setIsTesting(false);

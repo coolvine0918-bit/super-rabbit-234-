@@ -15,16 +15,34 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
 
   const fetchScores = async () => {
     setLoading(true);
+    let loadedFromBackend = false;
     try {
       const res = await fetch('/api/scores');
-      const data = await res.json();
-      if (data.topScores) setTopScores(data.topScores);
-      if (data.recentScores) setRecentScores(data.recentScores);
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (data.topScores && data.topScores.length > 0) {
+          setTopScores(data.topScores);
+          setRecentScores(data.recentScores || []);
+          loadedFromBackend = true;
+        }
+      }
     } catch {
-      // ignore
-    } finally {
-      setLoading(false);
+      // Backend not accessible, use local fallback
     }
+
+    if (!loadedFromBackend) {
+      try {
+        const stored: ScoreRecord[] = JSON.parse(localStorage.getItem('super_rabbit_score_records') || '[]');
+        if (stored.length > 0) {
+          const sorted = [...stored].sort((a, b) => b.totalScore - a.totalScore);
+          setTopScores(sorted.slice(0, 10));
+          setRecentScores(stored.slice(0, 10));
+        }
+      } catch {
+        // ignore
+      }
+    }
+    setLoading(false);
   };
 
   useEffect(() => {
