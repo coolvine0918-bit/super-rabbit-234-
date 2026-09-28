@@ -16,6 +16,7 @@ interface GameOverModalProps {
   appsScriptUrl: string;
   onRestart: () => void;
   onOpenSheetSetup: () => void;
+  onOpenReview?: () => void;
 }
 
 const BAKED_APPS_SCRIPT_URL =
@@ -34,6 +35,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   appsScriptUrl,
   onRestart,
   onOpenSheetSetup,
+  onOpenReview,
 }) => {
   const [name, setName] = useState(studentName || '토끼 대원');
   const [stuId, setStuId] = useState(studentId || '');
@@ -240,10 +242,19 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="bg-gray-100 border-t-3 border-gray-900 px-4 sm:px-6 py-3.5 flex items-center justify-between">
+        <div className="bg-gray-100 border-t-3 border-gray-900 px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row gap-2.5 items-center justify-between">
+          {onOpenReview && (
+            <button
+              onClick={onOpenReview}
+              className="w-full sm:w-1/2 py-3 bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-950 font-bold rounded-xl border-2 border-gray-900 flex items-center justify-center gap-1.5 cursor-pointer text-xs sm:text-sm touch-manipulation"
+            >
+              <BookOpen className="w-4 h-4 text-blue-700" />
+              <span>20문항 복습 & 해설 보기</span>
+            </button>
+          )}
           <button
             onClick={onRestart}
-            className="w-full py-3 bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-gray-950 font-bold rounded-xl border-3 border-gray-900 pixel-btn flex items-center justify-center gap-2 cursor-pointer text-sm sm:text-base touch-manipulation"
+            className={`w-full ${onOpenReview ? 'sm:w-1/2' : ''} py-3 bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-gray-950 font-bold rounded-xl border-3 border-gray-900 pixel-btn flex items-center justify-center gap-2 cursor-pointer text-sm sm:text-base touch-manipulation`}
           >
             <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>게임 다시 시작하기</span>

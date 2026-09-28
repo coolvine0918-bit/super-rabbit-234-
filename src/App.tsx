@@ -15,7 +15,7 @@ import { GameOverModal } from './components/GameOverModal';
 import { TouchControls } from './components/TouchControls';
 import { QUIZ_QUESTIONS } from './data/quizData';
 import { sounds } from './utils/audio';
-import { Play, Sparkles, Trophy, BookOpen, Sheet, HelpCircle, User, ShieldCheck, Tablet } from 'lucide-react';
+import { Play, Sparkles, Trophy, BookOpen, Sheet, HelpCircle, User, ShieldCheck, Tablet, Lock } from 'lucide-react';
 
 export const DEFAULT_APPS_SCRIPT_URL =
   'https://script.google.com/macros/s/AKfycbythNJ6neo2PDpWQBPB1Wvg6pef4a7xNCoitgxqST6jR-IA_-zUicFBCpIJVCm7kYd4rg/exec';
@@ -44,6 +44,12 @@ export default function App() {
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState<boolean>(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+
+  // Must finish at least 1 game before unlocking 20 questions review note
+  const [hasPlayedOnce, setHasPlayedOnce] = useState<boolean>(() => {
+    return sessionStorage.getItem('rabbit_has_played_once') === 'true';
+  });
+  const [reviewLockNotice, setReviewLockNotice] = useState<string | null>(null);
 
   // Sound
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
@@ -191,20 +197,31 @@ export default function App() {
     }
   }, []);
 
+  const markGamePlayed = useCallback(() => {
+    setHasPlayedOnce(true);
+    try {
+      sessionStorage.setItem('rabbit_has_played_once', 'true');
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const handleCloseQuiz = useCallback(() => {
     setActiveQuestionId(null);
     if (hp <= 0) {
       setGameWon(false);
       setIsGameOverModalOpen(true);
+      markGamePlayed();
     }
-  }, [hp]);
+  }, [hp, markGamePlayed]);
 
   // Game over / Stage clear
   const handleGameOver = useCallback((won: boolean) => {
     setGameWon(won);
     setIsGameOverModalOpen(true);
     setIsPlaying(false);
-  }, []);
+    markGamePlayed();
+  }, [markGamePlayed]);
 
   // Touch controls callback
   const handleKeyChange = useCallback((key: 'left' | 'right' | 'up' | 'down' | 'jump' | 'shoot', active: boolean) => {
@@ -214,6 +231,16 @@ export default function App() {
   const currentQuizObj = activeQuestionId
     ? QUIZ_QUESTIONS.find(q => q.id === activeQuestionId) || null
     : null;
+
+  const handleOpenReview = () => {
+    if (!hasPlayedOnce) {
+      setReviewLockNotice('🔒 게임을 최소 1회 끝마쳐야(클리어 또는 게임오버) 20문항 복습하기가 열립니다!');
+      sounds.playHurt();
+      setTimeout(() => setReviewLockNotice(null), 3500);
+      return;
+    }
+    setIsReviewModalOpen(true);
+  };
 
   return (
     <div className="flex flex-col w-screen h-screen overflow-hidden bg-sky-200 text-gray-900 font-sans select-none touch-none">
@@ -234,7 +261,6 @@ export default function App() {
         laserTimeLeft={laserTimeLeft}
         onOpenSettings={() => setIsSheetModalOpen(true)}
         onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
-        onOpenReview={() => setIsReviewModalOpen(true)}
         onOpenProfile={() => setIsProfileModalOpen(true)}
         soundEnabled={soundEnabled}
         onToggleSound={handleToggleSound}
@@ -343,20 +369,47 @@ export default function App() {
 
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setIsReviewModalOpen(true)}
-                    className="flex-1 py-2 sm:py-2.5 bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-900 font-bold text-xs sm:text-sm rounded-xl border-2 border-gray-900 cursor-pointer flex items-center justify-center gap-1.5 touch-manipulation"
+                    onClick={handleOpenReview}
+                    className={`flex-1 py-2 sm:py-2.5 font-bold text-xs sm:text-sm rounded-xl border-2 border-gray-900 cursor-pointer flex items-center justify-center gap-1.5 touch-manipulation transition-all shadow-[2px_2px_0px_#111827] ${
+                      hasPlayedOnce
+                        ? 'bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-900'
+                        : 'bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-500'
+                    }`}
+                    title={hasPlayedOnce ? '20문항 복습 & 학습노트 열기' : '1회 플레이 완료 후 해금됩니다'}
                   >
-                    <BookOpen className="w-4 h-4" />
-                    <span>20문항 복습하기</span>
+                    {hasPlayedOnce ? (
+                      <>
+                        <BookOpen className="w-4 h-4 text-blue-700" />
+                        <span>20문항 복습하기</span>
+                        <span className="text-[10px] bg-emerald-600 text-white px-1.5 py-0.5 rounded-md font-bold">
+                          해금됨
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-4 h-4 text-gray-500" />
+                        <span>20문항 복습하기</span>
+                        <span className="text-[10px] bg-gray-300 text-gray-700 px-1.5 py-0.5 rounded-md font-bold">
+                          1회 플레이 후 해금
+                        </span>
+                      </>
+                    )}
                   </button>
                   <button
                     onClick={() => setIsSheetModalOpen(true)}
-                    className="flex-1 py-2 sm:py-2.5 bg-emerald-100 hover:bg-emerald-200 active:bg-emerald-300 text-emerald-900 font-bold text-xs sm:text-sm rounded-xl border-2 border-gray-900 cursor-pointer flex items-center justify-center gap-1.5 touch-manipulation"
+                    className="flex-1 py-2 sm:py-2.5 bg-emerald-100 hover:bg-emerald-200 active:bg-emerald-300 text-emerald-900 font-bold text-xs sm:text-sm rounded-xl border-2 border-gray-900 cursor-pointer flex items-center justify-center gap-1.5 touch-manipulation shadow-[2px_2px_0px_#111827]"
                   >
                     <Sheet className="w-4 h-4" />
                     <span>구글 시트 연동 설정</span>
                   </button>
                 </div>
+
+                {/* Lock Feedback Notice */}
+                {reviewLockNotice && (
+                  <div className="p-2 sm:p-2.5 bg-rose-100 border-2 border-rose-400 text-rose-900 text-xs font-bold rounded-xl text-center shadow-xs animate-bounce">
+                    {reviewLockNotice}
+                  </div>
+                )}
               </div>
 
               {/* Tablet Controls Guide */}
@@ -412,6 +465,7 @@ export default function App() {
             appsScriptUrl={appsScriptUrl}
             onRestart={handleStartGame}
             onOpenSheetSetup={() => setIsSheetModalOpen(true)}
+            onOpenReview={() => setIsReviewModalOpen(true)}
           />
         )}
 
