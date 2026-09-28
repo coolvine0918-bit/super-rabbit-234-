@@ -20,7 +20,7 @@ interface GameOverModalProps {
 }
 
 const BAKED_APPS_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbythNJ6neo2PDpWQBPB1Wvg6pef4a7xNCoitgxqST6jR-IA_-zUicFBCpIJVCm7kYd4rg/exec';
+  'https://script.google.com/macros/s/AKfycbxM5TUrtEW5zbeqBlq1az1XkMs9-hzy0GdpI5LWGv-QnhFa0AaC5yuwVo7o0GWYH3D7bQ/exec';
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
   won,

@@ -18,7 +18,7 @@ import { sounds } from './utils/audio';
 import { Play, Sparkles, Trophy, BookOpen, Sheet, HelpCircle, User, ShieldCheck, Tablet, Lock } from 'lucide-react';
 
 export const DEFAULT_APPS_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbythNJ6neo2PDpWQBPB1Wvg6pef4a7xNCoitgxqST6jR-IA_-zUicFBCpIJVCm7kYd4rg/exec';
+  'https://script.google.com/macros/s/AKfycbxM5TUrtEW5zbeqBlq1az1XkMs9-hzy0GdpI5LWGv-QnhFa0AaC5yuwVo7o0GWYH3D7bQ/exec';
 
 export default function App() {
   // Game states
@@ -63,13 +63,19 @@ export default function App() {
   });
   const [appsScriptUrl, setAppsScriptUrl] = useState<string>(() => {
     const stored = localStorage.getItem('rabbit_apps_script_url');
-    return stored && stored.trim() ? stored : DEFAULT_APPS_SCRIPT_URL;
+    if (!stored || stored.includes('AKfycbythNJ6neo2PDpWQBPB1Wvg6pef4a7xNCoitgxqST6jR-IA_-zUicFBCpIJVCm7kYd4rg')) {
+      localStorage.setItem('rabbit_apps_script_url', DEFAULT_APPS_SCRIPT_URL);
+      return DEFAULT_APPS_SCRIPT_URL;
+    }
+    return stored.trim();
   });
 
-  // Ensure default URL is saved to localStorage
+  // Ensure new baked default URL is saved to localStorage
   useEffect(() => {
-    if (!localStorage.getItem('rabbit_apps_script_url')) {
+    const current = localStorage.getItem('rabbit_apps_script_url');
+    if (!current || current.includes('AKfycbythNJ6neo2PDpWQBPB1Wvg6pef4a7xNCoitgxqST6jR-IA_-zUicFBCpIJVCm7kYd4rg')) {
       localStorage.setItem('rabbit_apps_script_url', DEFAULT_APPS_SCRIPT_URL);
+      setAppsScriptUrl(DEFAULT_APPS_SCRIPT_URL);
     }
   }, []);
 
